@@ -13,18 +13,26 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y xfce4 xfce4-goodies xrdp
+          # Fix for dbus error
+          sudo apt-get install -y dbus-x11
           sudo service xrdp start
 
-      - name: Configure XRDP to use XFCE
+      - name: Configure XRDP to use XFCE (Global)
         run: |
-          echo "xfce4-session" > ~/.xsession
-          sudo sed -i.bak '/fi/a #xrdp multiple users configuration \n xfce-session \n' /etc/xrdp/startwm.sh
+          sudo sed -i.bak '/fi/a #xrdp multiple users configuration \n xfce4-session \n' /etc/xrdp/startwm.sh
 
-      - name: Create User for RDP
+      - name: Create User for RDP with Session Fix
         run: |
+          # Create user
           sudo useradd -m -s /bin/bash runneradmin
           echo "runneradmin:password123" | sudo chpasswd
           sudo usermod -aG sudo runneradmin
+          
+          # This is the FIX for 'failsafe session' error:
+          # We force the .xsession file into the user's home directory
+          sudo bash -c 'echo "xfce4-session" > /home/runneradmin/.xsession'
+          sudo chown runneradmin:runneradmin /home/runneradmin/.xsession
+          
           echo "=========================================="
           echo "Username: runneradmin"
           echo "Password: password123"
