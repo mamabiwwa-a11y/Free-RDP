@@ -1,3 +1,4 @@
+
 name: Linux_GUI_RDP
 
 on:
@@ -9,27 +10,40 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Update and Install Desktop Environment (XFCE) & XRDP
+      - name: Update and Install Desktop Environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y xfce4 xfce4-goodies xrdp
-          # Fix for dbus error
-          sudo apt-get install -y dbus-x11
+          # Install XFCE, XRDP, and XORG (Important!)
+          sudo apt-get install -y xfce4 xfce4-goodies xrdp xorg dbus-x11 x11-xserver-utils
+          sudo systemctl enable xrdp
           sudo service xrdp start
 
-      - name: Configure XRDP to use XFCE (Global)
+      - name: Hard Force XFCE Startup (The Nuclear Fix)
         run: |
-          sudo sed -i.bak '/fi/a #xrdp multiple users configuration \n xfce4-session \n' /etc/xrdp/startwm.sh
+          # Backup original startwm.sh
+          sudo mv /etc/xrdp/startwm.sh /etc/xrdp/startwm.sh.bak
+          
+          # Create a fresh startwm.sh that ONLY starts XFCE
+          sudo bash -c "cat > /etc/xrdp/startwm.sh <<EOF
+          #!/bin/sh
+          if [ -r /etc/default/locale ]; then
+            . /etc/default/locale
+            export LANG LANGUAGE
+          fi
+          startxfce4
+          EOF"
+          
+          # Make it executable
+          sudo chmod +x /etc/xrdp/startwm.sh
+          sudo service xrdp restart
 
-      - name: Create User for RDP with Session Fix
+      - name: Create User
         run: |
-          # Create user
           sudo useradd -m -s /bin/bash runneradmin
           echo "runneradmin:password123" | sudo chpasswd
           sudo usermod -aG sudo runneradmin
           
-          # This is the FIX for 'failsafe session' error:
-          # We force the .xsession file into the user's home directory
+          # Force .xsession for the user as well
           sudo bash -c 'echo "xfce4-session" > /home/runneradmin/.xsession'
           sudo chown runneradmin:runneradmin /home/runneradmin/.xsession
           
@@ -46,7 +60,7 @@ jobs:
         env:
           TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
         run: |
-          sudo tailscale up --authkey=$TAILSCALE_AUTH_KEY --hostname=linux-desktop-box
+          sudo tailscale up --authkey=$TAILSCALE_AUTH_KEY --hostname=linux-desktop-final
           
       - name: Display IP Address
         run: |
